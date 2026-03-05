@@ -439,13 +439,13 @@ static int wm8994_configure_output(const struct device *dev, uint16_t *power_mgn
 		return ret;
 	}
 
-	/* Set headphone volume: 0x36 = -3dB (VU + ZC bits set) */
-	ret = wm8994_write_reg(dev, WM8994_REG_LEFT_OUTPUT_VOL, 0x36 | 0x0140);
+	/* Set headphone volume: 0x3A = +1dB, unmuted, VU bit set. */
+	ret = wm8994_write_reg(dev, WM8994_REG_LEFT_OUTPUT_VOL, 0x3A | 0x0140);
 	if (ret != 0) {
 		return ret;
 	}
 
-	ret = wm8994_write_reg(dev, WM8994_REG_RIGHT_OUTPUT_VOL, 0x36 | 0x0140);
+	ret = wm8994_write_reg(dev, WM8994_REG_RIGHT_OUTPUT_VOL, 0x3A | 0x0140);
 	if (ret != 0) {
 		return ret;
 	}
@@ -481,14 +481,16 @@ static int wm8994_configure_input(const struct device *dev)
 		return ret;
 	}
 
-	/* Unmute IN1L_TO_MIXINL, 0dB (no +30dB boost) */
-	ret = wm8994_write_reg(dev, WM8994_REG_INPUT_MIXER_3, 0x0025);
+	/* Unmute IN1L_TO_MIXINL, 0dB, NO output-to-input feedback.
+	 * Bits[2:0] = MIXOUTL_MIXINL_VOL must be 0 to prevent output mixer
+	 * feeding back into input mixer (old 0x0025 had feedback enabled). */
+	ret = wm8994_write_reg(dev, WM8994_REG_INPUT_MIXER_3, 0x0020);
 	if (ret != 0) {
 		return ret;
 	}
 
-	/* Unmute IN1R_TO_MIXINR, 0dB (no +30dB boost) */
-	ret = wm8994_write_reg(dev, WM8994_REG_INPUT_MIXER_4, 0x0025);
+	/* Unmute IN1R_TO_MIXINR, 0dB, no feedback */
+	ret = wm8994_write_reg(dev, WM8994_REG_INPUT_MIXER_4, 0x0020);
 	if (ret != 0) {
 		return ret;
 	}
@@ -544,14 +546,15 @@ static int wm8994_configure_input(const struct device *dev)
 		return ret;
 	}
 
-	/* Disable mute on IN1L, IN1L Volume = +9dB (0x11) */
-	ret = wm8994_write_reg(dev, WM8994_REG_LEFT_LINE_IN_12_VOL, 0x0011);
+	/* Disable mute on IN1L, IN1L Volume = 0dB (0x0B).
+	 * Was +9dB (0x11) but hot signals clip at that level. */
+	ret = wm8994_write_reg(dev, WM8994_REG_LEFT_LINE_IN_12_VOL, 0x000B);
 	if (ret != 0) {
 		return ret;
 	}
 
-	/* Disable mute on IN1R, IN1R Volume = +9dB (0x11) */
-	ret = wm8994_write_reg(dev, WM8994_REG_RIGHT_LINE_IN_12_VOL, 0x0011);
+	/* Disable mute on IN1R, IN1R Volume = 0dB (0x0B) */
+	ret = wm8994_write_reg(dev, WM8994_REG_RIGHT_LINE_IN_12_VOL, 0x000B);
 	if (ret != 0) {
 		return ret;
 	}
