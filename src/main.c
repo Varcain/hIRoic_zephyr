@@ -559,9 +559,9 @@ int main(void)
 			/* Black background */
 			lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
 
-			/* Title: "hIRoic" — Montserrat 32, white, top-left */
+			/* Title: "hIRoic (Zephyr)" — Montserrat 32, white, top-left */
 			lv_obj_t *title = lv_label_create(lv_screen_active());
-			lv_label_set_text(title, "hIRoic");
+			lv_label_set_text(title, "hIRoic (Zephyr)");
 			lv_obj_set_pos(title, 10, 10);
 			lv_obj_set_style_text_color(title, lv_color_white(), 0);
 			lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
