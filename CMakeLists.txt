@@ -26,9 +26,18 @@ list(APPEND DTS_ROOT ${CMAKE_CURRENT_SOURCE_DIR})
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(hIRoic)
 
+set(CORE ${CMAKE_CURRENT_SOURCE_DIR}/core)
+
 target_sources(app PRIVATE
     src/main.c
-    src/dsp.c
     src/ir_manager.c
-    src/wav_parser.c
+    ${CORE}/src/dsp.c
+    ${CORE}/src/wav_parser.c
+    ${CORE}/src/ir_convert.c
+    ${CORE}/src/lvgl_ui.c
+)
+
+target_include_directories(app PRIVATE
+    ${CORE}/include
+    src/
 )

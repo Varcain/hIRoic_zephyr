@@ -44,6 +44,7 @@
 #include <lvgl_display.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/display.h>
+#include "lvgl_ui_core.h"
 #endif
 
 LOG_MODULE_REGISTER(hiroic, LOG_LEVEL_DBG);
@@ -107,11 +108,6 @@ static volatile int16_t audio_peak_level;
 static const struct device *i2s_dev_rx;
 static const struct device *i2s_dev_tx;
 
-#ifdef CONFIG_LVGL
-static lv_obj_t *cpu_label;
-static lv_obj_t *ir_label;
-static lv_obj_t *vu_bar;
-#endif
 
 /* ========================================================================= */
 /* I2S HELPERS                                                               */
@@ -289,8 +285,7 @@ static void audio_thread_fn(void *p1, void *p2, void *p3)
 			memcpy(tx_block, rx_block, BLOCK_SIZE);
 		} else {
 			/* Normal mode: apply IR convolution */
-			dsp_process((int16_t *)tx_block, (int16_t *)rx_block,
-				    DSP_BUFFER_SIZE);
+			dsp_process((int16_t *)tx_block, (int16_t *)rx_block);
 		}
 #endif
 
@@ -353,17 +348,13 @@ static void input_thread_fn(void *p1, void *p2, void *p3)
 			int res = ir_manager_getNextIR(ir_buffer, &ir_length, &ir_sample_rate);
 			if (res == 0) {
 				/* Reconfigure DSP with new IR */
-				dsp_loadIR(ir_buffer, ir_length, 32, ir_sample_rate);
+				dsp_loadIR(ir_buffer, ir_length, ir_sample_rate);
 				printk("Loaded IR: %u samples @ %u Hz\n", ir_length, ir_sample_rate);
 #ifdef CONFIG_LVGL
-				if (ir_label != NULL) {
-					char ir_buf[80];
-					snprintf(ir_buf, sizeof(ir_buf), "IR: %s (%u samples)",
-						 ir_manager_getCurrentIRName(), ir_length);
-					lv_lock();
-					lv_label_set_text(ir_label, ir_buf);
-					lv_unlock();
-				}
+				lv_lock();
+				lvgl_ui_update_ir(ir_manager_getCurrentIRName(),
+						  ir_length);
+				lv_unlock();
 #endif
 			} else {
 				printk("Failed to load IR: %d\n", res);
@@ -400,13 +391,9 @@ static void heartbeat_thread_fn(void *p1, void *p2, void *p3)
 
 #ifdef CONFIG_LVGL
 		/* Update VU bar every 33ms (~30 fps) */
-		if (vu_bar != NULL) {
-			int16_t peak = audio_peak_level;
-			uint32_t level = ((uint32_t)(peak > 0 ? peak : 0) * 100U) / 32767U;
-			lv_lock();
-			lv_bar_set_value(vu_bar, level, LV_ANIM_OFF);
-			lv_unlock();
-		}
+		lv_lock();
+		lvgl_ui_update_vu(audio_peak_level);
+		lv_unlock();
 #endif
 
 		/* CPU stats + label every ~1s (30 ticks) */
@@ -438,13 +425,9 @@ static void heartbeat_thread_fn(void *p1, void *p2, void *p3)
 		       audio_overrun_count);
 
 #ifdef CONFIG_LVGL
-		if (cpu_label != NULL) {
-			char buf[32];
-			snprintf(buf, sizeof(buf), "CPU: %u%%", pct);
-			lv_lock();
-			lv_label_set_text(cpu_label, buf);
-			lv_unlock();
-		}
+		lv_lock();
+		lvgl_ui_update_cpu(pct);
+		lv_unlock();
 #endif
 	}
 }
@@ -538,7 +521,7 @@ int main(void)
 	if (ir_manager_init() == 0) {
 		/* Load first IR from SD card */
 		if (ir_manager_getNextIR(ir_buffer, &ir_length, &ir_sample_rate) == 0) {
-			dsp_loadIR(ir_buffer, ir_length, 32, ir_sample_rate);
+			dsp_loadIR(ir_buffer, ir_length, ir_sample_rate);
 			printk("Initial IR: %u samples @ %u Hz\n", ir_length, ir_sample_rate);
 		} else {
 			printk("No IR loaded from SD, using default\n");
@@ -555,47 +538,11 @@ int main(void)
 			printk("ERROR: display device not ready\n");
 		} else {
 			lv_lock();
-
-			/* Black background */
-			lv_obj_set_style_bg_color(lv_screen_active(), lv_color_black(), 0);
-
-			/* Title: "hIRoic (Zephyr)" — Montserrat 32, white, top-left */
-			lv_obj_t *title = lv_label_create(lv_screen_active());
-			lv_label_set_text(title, "hIRoic (Zephyr)");
-			lv_obj_set_pos(title, 10, 10);
-			lv_obj_set_style_text_color(title, lv_color_white(), 0);
-			lv_obj_set_style_text_font(title, &lv_font_montserrat_32, 0);
-
-			/* CPU label — Montserrat 14, green */
-			cpu_label = lv_label_create(lv_screen_active());
-			lv_label_set_text(cpu_label, "CPU: 0%");
-			lv_obj_set_pos(cpu_label, 10, 55);
-			lv_obj_set_style_text_color(cpu_label, lv_color_make(0, 255, 0), 0);
-			lv_obj_set_style_text_font(cpu_label, &lv_font_montserrat_14, 0);
-
-			/* IR info label — Montserrat 14, white */
-			ir_label = lv_label_create(lv_screen_active());
+			lvgl_ui_create_widgets("hIRoic (Zephyr)");
 			if (ir_length > 0) {
-				char ir_buf[80];
-				snprintf(ir_buf, sizeof(ir_buf), "IR: %s (%u samples)",
-					 ir_manager_getCurrentIRName(), ir_length);
-				lv_label_set_text(ir_label, ir_buf);
-			} else {
-				lv_label_set_text(ir_label, "IR: default (460 samples)");
+				lvgl_ui_update_ir(ir_manager_getCurrentIRName(),
+						  ir_length);
 			}
-			lv_obj_set_pos(ir_label, 10, 80);
-			lv_obj_set_style_text_color(ir_label, lv_color_white(), 0);
-			lv_obj_set_style_text_font(ir_label, &lv_font_montserrat_14, 0);
-
-			/* VU meter bar — green on dark gray */
-			vu_bar = lv_bar_create(lv_screen_active());
-			lv_obj_set_size(vu_bar, 200, 12);
-			lv_obj_set_pos(vu_bar, 10, 105);
-			lv_bar_set_range(vu_bar, 0, 100);
-			lv_bar_set_value(vu_bar, 0, LV_ANIM_OFF);
-			lv_obj_set_style_bg_color(vu_bar, lv_color_make(40, 40, 40), LV_PART_MAIN);
-			lv_obj_set_style_bg_color(vu_bar, lv_color_make(0, 200, 0), LV_PART_INDICATOR);
-
 			lv_unlock();
 
 			/* Turn on backlight */
